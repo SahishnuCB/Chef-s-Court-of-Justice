@@ -9,7 +9,7 @@ dotenv.config();
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 
-// POST /auth/signup
+
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -38,7 +38,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// POST /auth/login
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;

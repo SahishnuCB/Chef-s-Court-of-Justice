@@ -5,10 +5,10 @@ import { authRequired, requireRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Multer config for uploads
+
 const upload = multer({
   dest: 'uploads/',
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       'application/pdf',
@@ -23,7 +23,7 @@ const upload = multer({
   }
 });
 
-// POST /case/submit  (Defendant / Plaintiff)
+
 router.post(
   '/submit',
   authRequired,
@@ -66,12 +66,12 @@ router.post(
   }
 );
 
-// GET /case/all  (All roles)
+
 router.get('/all', authRequired, async (req, res) => {
   try {
     const where = {};
 
-    // Jurors only see APPROVED cases
+
     if (req.user.role === 'JUROR') {
       where.status = 'APPROVED';
     }
@@ -89,7 +89,7 @@ router.get('/all', authRequired, async (req, res) => {
   }
 });
 
-// GET /case/by-name/:name   (Juror filtering by defendant/plaintiff name)
+
 router.get('/by-name/:name', authRequired, requireRoles('JUROR'), async (req, res) => {
   try {
     const name = req.params.name;
@@ -108,7 +108,7 @@ router.get('/by-name/:name', authRequired, requireRoles('JUROR'), async (req, re
   }
 });
 
-// PATCH /case/edit/:id   (Judge edit content)
+
 router.patch('/edit/:id', authRequired, requireRoles('JUDGE'), async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -123,7 +123,7 @@ router.patch('/edit/:id', authRequired, requireRoles('JUDGE'), async (req, res) 
   }
 });
 
-// DELETE /case/delete/:id   (Judge delete)
+
 router.delete('/delete/:id', authRequired, requireRoles('JUDGE'), async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -135,7 +135,7 @@ router.delete('/delete/:id', authRequired, requireRoles('JUDGE'), async (req, re
   }
 });
 
-// PATCH /case/approve/:id   (Judge approve)
+
 router.patch('/approve/:id', authRequired, requireRoles('JUDGE'), async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -150,7 +150,7 @@ router.patch('/approve/:id', authRequired, requireRoles('JUDGE'), async (req, re
   }
 });
 
-// PATCH /case/reject/:id   (Judge reject)
+
 router.patch('/reject/:id', authRequired, requireRoles('JUDGE'), async (req, res) => {
   try {
     const id = Number(req.params.id);

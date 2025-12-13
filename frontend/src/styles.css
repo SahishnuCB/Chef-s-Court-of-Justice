@@ -33,7 +33,6 @@ h1 {
   margin: 0 0 1.5rem 0;
 }
 
-/* CARD / BOX */
 .card {
   background: #0A0E14;
   border-radius: 0.75rem;
@@ -43,7 +42,6 @@ h1 {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
 
-/* Submit-case form */
 .card .form {
   display: flex;
   flex-direction: column;
@@ -64,7 +62,6 @@ h1 {
   color: #e5e7eb;
 }
 
-/* AUTH FORM */
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -142,7 +139,7 @@ button:hover {
   background: #1a1c1f;
 }
 
-/* Keep judge action colors */
+/* judge action colors */
 .judge-actions {
   display: flex;
   justify-content: center;

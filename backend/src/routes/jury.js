@@ -4,7 +4,7 @@ import { authRequired, requireRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// POST /jury/vote/:caseId  (Juror vote once per case)
+
 router.post('/vote/:caseId', authRequired, requireRoles('JUROR'), async (req, res) => {
   try {
     const caseId = Number(req.params.caseId);
@@ -14,13 +14,13 @@ router.post('/vote/:caseId', authRequired, requireRoles('JUROR'), async (req, re
       return res.status(400).json({ message: 'Invalid verdict' });
     }
 
-    // Ensure case exists and is APPROVED
+
     const courtCase = await prisma.courtCase.findUnique({ where: { id: caseId } });
     if (!courtCase || courtCase.status !== 'APPROVED') {
       return res.status(400).json({ message: 'Can only vote on approved cases' });
     }
 
-    // Enforce one vote per juror per case
+
     const existing = await prisma.juryVote.findUnique({
       where: { caseId_jurorId: { caseId, jurorId: req.user.id } }
     });
@@ -43,7 +43,7 @@ router.post('/vote/:caseId', authRequired, requireRoles('JUROR'), async (req, re
   }
 });
 
-// GET /jury/results/:caseId  (Judge & Juror view results)
+
 router.get('/results/:caseId', authRequired, requireRoles('JUROR', 'JUDGE'), async (req, res) => {
   try {
     const caseId = Number(req.params.caseId);

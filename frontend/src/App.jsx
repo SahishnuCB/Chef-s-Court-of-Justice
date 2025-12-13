@@ -25,7 +25,7 @@ function App() {
   const [voteVerdict, setVoteVerdict] = useState("GUILTY");
   const [selectedCaseId, setSelectedCaseId] = useState(null);
   const [results, setResults] = useState(null);
-  const [judgeFilter, setJudgeFilter] = useState("ALL"); // ALL | PENDING | APPROVED | REJECTED
+  const [judgeFilter, setJudgeFilter] = useState("ALL");
 
   useEffect(() => {
     if (user) {
