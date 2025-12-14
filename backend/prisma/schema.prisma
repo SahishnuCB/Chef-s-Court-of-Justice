@@ -26,14 +26,13 @@ enum Verdict {
 }
 
 model User {
-  id       Int    @id @default(autoincrement())
-  name     String
-  email    String @unique
-  password String
-  role     Role
-
-  casesSubmitted CourtCase[] @relation("CasesSubmitted")
-  juryVotes      JuryVote[]
+  id        Int         @id @default(autoincrement())
+  name      String
+  email     String      @unique
+  password  String
+  role      Role
+  cases     CourtCase[] @relation("UserCases")
+  juryVotes JuryVote[]
 }
 
 model CourtCase {
@@ -41,14 +40,13 @@ model CourtCase {
   title        String
   argument     String
   evidenceText String
-  evidenceFile String?     // stored filename on disk
+  evidenceFile String?
   status       CaseStatus @default(PENDING)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  submittedBy   User   @relation("CasesSubmitted", fields: [submittedById], references: [id])
   submittedById Int
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  submittedBy   User       @relation("UserCases", fields: [submittedById], references: [id])
 
   juryVotes JuryVote[]
 }
@@ -57,13 +55,11 @@ model JuryVote {
   id      Int     @id @default(autoincrement())
   verdict Verdict
 
-  case   CourtCase @relation(fields: [caseId], references: [id])
   caseId Int
-
-  juror   User @relation(fields: [jurorId], references: [id])
   jurorId Int
 
-  createdAt DateTime @default(now())
+  case  CourtCase @relation(fields: [caseId], references: [id])
+  juror User      @relation(fields: [jurorId], references: [id])
 
-  @@unique([caseId, jurorId])
+  @@unique([caseId, jurorId], name: "caseId_jurorId")
 }

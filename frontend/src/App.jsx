@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import api from "./api";
 
 function App() {
@@ -6,6 +6,7 @@ function App() {
     const stored = localStorage.getItem("user");
     return stored ? JSON.parse(stored) : null;
   });
+
   const [authMode, setAuthMode] = useState("login");
   const [form, setForm] = useState({
     name: "",
@@ -13,38 +14,50 @@ function App() {
     password: "",
     role: "DEFENDANT",
   });
+
   const [cases, setCases] = useState([]);
   const [loadingCases, setLoadingCases] = useState(false);
+
   const [newCase, setNewCase] = useState({
     title: "",
     argument: "",
     evidenceText: "",
   });
   const [evidenceFile, setEvidenceFile] = useState(null);
+
   const [message, setMessage] = useState("");
-  const [voteVerdict, setVoteVerdict] = useState("GUILTY");
+  const [voteSelections, setVoteSelections] = useState({});
+  const [jurorVotes, setJurorVotes] = useState({});
+  const [judgeFilter, setJudgeFilter] = useState("ALL");
   const [selectedCaseId, setSelectedCaseId] = useState(null);
   const [results, setResults] = useState(null);
-  const [judgeFilter, setJudgeFilter] = useState("ALL");
 
   useEffect(() => {
     if (user) {
       fetchCases();
+      if (user.role === "JUROR") {
+        loadJurorVotes();
+      }
     }
   }, [user]);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
   };
 
   const handleNewCaseChange = (e) => {
-    setNewCase({ ...newCase, [e.target.name]: e.target.value });
+    setNewCase((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
   };
 
   const resetMessages = () => {
     setMessage("");
     setResults(null);
-    setSelectedCaseId(null);
   };
 
   const handleSignup = async (e) => {
@@ -72,10 +85,10 @@ function App() {
         email: form.email,
         password: form.password,
       });
-      const { token, user } = res.data;
+      const { token, user: loggedInUser } = res.data;
       localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
-      setUser(user);
+      localStorage.setItem("user", JSON.stringify(loggedInUser));
+      setUser(loggedInUser);
       setMessage("Logged in successfully");
     } catch (err) {
       setMessage(err.response?.data?.message || "Login failed");
@@ -89,18 +102,48 @@ function App() {
     setCases([]);
     setSelectedCaseId(null);
     setResults(null);
+    setJurorVotes({});
+    setVoteSelections({});
   };
 
-  const fetchCases = async () => {
+  const fetchCases = async (status) => {
     resetMessages();
     setLoadingCases(true);
     try {
-      const res = await api.get("/case/all");
+      let url = "/case/all";
+
+      const effectiveFilter = status || judgeFilter;
+      if (
+        user &&
+        user.role === "JUDGE" &&
+        effectiveFilter &&
+        effectiveFilter !== "ALL"
+      ) {
+        url += `?status=${effectiveFilter}`;
+      }
+
+      const res = await api.get(url);
       setCases(res.data);
+      if (user && user.role === "JUROR") {
+        loadJurorVotes();
+      }
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to fetch cases");
     } finally {
       setLoadingCases(false);
+    }
+  };
+
+  const loadJurorVotes = async () => {
+    try {
+      const res = await api.get("/jury/my-votes");
+      const map = {};
+      res.data.forEach((v) => {
+        map[v.caseId] = v.verdict;
+      });
+      setJurorVotes(map);
+    } catch (err) {
+      console.error("Failed to load juror votes", err);
     }
   };
 
@@ -115,10 +158,14 @@ function App() {
       if (evidenceFile) {
         formData.append("evidenceFile", evidenceFile);
       }
-      await api.post("/case/submit", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+
+      const res = await api.post("/case/submit", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
-      setMessage("Case submitted successfully (awaiting judge approval)");
+
+      setMessage(res.data?.message || "Case submitted");
       setNewCase({ title: "", argument: "", evidenceText: "" });
       setEvidenceFile(null);
       fetchCases();
@@ -130,8 +177,8 @@ function App() {
   const judgeAction = async (id, action) => {
     resetMessages();
     try {
-      await api.patch(`/case/${action}/${id}`);
-      setMessage(`Case ${action}d successfully`);
+      const res = await api.patch(`/case/${action}/${id}`);
+      setMessage(res.data?.message || `Case ${action}d`);
       fetchCases();
     } catch (err) {
       setMessage(err.response?.data?.message || `Failed to ${action} case`);
@@ -141,8 +188,8 @@ function App() {
   const deleteCase = async (id) => {
     resetMessages();
     try {
-      await api.delete(`/case/delete/${id}`);
-      setMessage("Case deleted");
+      const res = await api.delete(`/case/delete/${id}`);
+      setMessage(res.data?.message || "Case deleted");
       fetchCases();
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to delete case");
@@ -152,9 +199,12 @@ function App() {
   const castVote = async (id) => {
     resetMessages();
     if (!id) return;
+    const verdict = voteSelections[id] || "GUILTY";
     try {
-      await api.post(`/jury/vote/${id}`, { verdict: voteVerdict });
-      setMessage("Vote submitted");
+      const res = await api.post(`/jury/vote/${id}`, { verdict });
+      setJurorVotes((prev) => ({ ...prev, [id]: verdict }));
+      setMessage(res.data?.message || "Vote submitted");
+      await fetchResults(id);
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to vote");
     }
@@ -165,10 +215,35 @@ function App() {
     if (!id) return;
     try {
       const res = await api.get(`/jury/results/${id}`);
-      setResults(res.data);
       setSelectedCaseId(id);
+      setResults(res.data);
     } catch (err) {
       setMessage(err.response?.data?.message || "Failed to fetch results");
+    }
+  };
+
+  const handleEditCase = async (c) => {
+    const newTitle = window.prompt("Edit title", c.title);
+    if (newTitle === null) return;
+    const newArgument = window.prompt("Edit argument", c.argument);
+    if (newArgument === null) return;
+    const newEvidenceText = window.prompt(
+      "Edit evidence text",
+      c.evidenceText
+    );
+    if (newEvidenceText === null) return;
+
+    resetMessages();
+    try {
+      const res = await api.patch(`/case/edit/${c.id}`, {
+        title: newTitle,
+        argument: newArgument,
+        evidenceText: newEvidenceText,
+      });
+      setMessage(res.data?.message || "Case updated");
+      fetchCases();
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to update case");
     }
   };
 
@@ -183,7 +258,7 @@ function App() {
           <th>Status</th>
           <th>Submitted By</th>
           {user?.role === "JUDGE" && <th>Actions</th>}
-          {user?.role === "JUROR" && <th>Vote / Results</th>}
+          {user?.role === "JUROR" && <th>Vote</th>}
         </tr>
       </thead>
       <tbody>
@@ -216,13 +291,16 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => handleEditCase(c)}
+                  >
+                    ✏ Edit
+                  </button>
+                  <button
+                    type="button"
                     className="btn-delete"
                     onClick={() => deleteCase(c.id)}
                   >
                     🗑 Delete
-                  </button>
-                  <button type="button" onClick={() => fetchResults(c.id)}>
-                    📊 Results
                   </button>
                 </div>
               </td>
@@ -231,8 +309,14 @@ function App() {
               <td>
                 <div className="vote-section">
                   <select
-                    value={voteVerdict}
-                    onChange={(e) => setVoteVerdict(e.target.value)}
+                    value={voteSelections[c.id] || "GUILTY"}
+                    onChange={(e) =>
+                      setVoteSelections((prev) => ({
+                        ...prev,
+                        [c.id]: e.target.value,
+                      }))
+                    }
+                    disabled={Boolean(jurorVotes[c.id])}
                   >
                     <option value="GUILTY">Guilty</option>
                     <option value="NOT_GUILTY">Not Guilty</option>
@@ -242,16 +326,19 @@ function App() {
                       setSelectedCaseId(c.id);
                       castVote(c.id);
                     }}
+                    disabled={Boolean(jurorVotes[c.id])}
                   >
-                    Vote
+                    {jurorVotes[c.id] ? "Voted" : "Vote"}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedCaseId(c.id);
                       fetchResults(c.id);
                     }}
+                    disabled={!jurorVotes[c.id]}
                   >
-                    View Results
+                    📊 Results
                   </button>
                 </div>
               </td>
@@ -266,7 +353,7 @@ function App() {
     return (
       <div className="container">
         <h1>Chef&apos;s Court of Justice</h1>
-        <div className="card auth-card">
+        <div className="card">
           <form
             onSubmit={authMode === "signup" ? handleSignup : handleLogin}
             className="form auth-form centered-form"
@@ -309,7 +396,9 @@ function App() {
             <div className="auth-toggle-row">
               <button
                 type="button"
-                className={`toggle-btn ${authMode === "login" ? "active" : ""}`}
+                className={`toggle-btn ${
+                  authMode === "login" ? "active" : ""
+                }`}
                 onClick={() => setAuthMode("login")}
               >
                 Login
@@ -337,10 +426,6 @@ function App() {
   }
 
   const userCases = cases.filter((c) => c.submittedBy?.id === user.id);
-  const filteredJudgeCases =
-    judgeFilter === "ALL"
-      ? cases
-      : cases.filter((c) => c.status === judgeFilter);
 
   return (
     <div className="container">
@@ -386,7 +471,9 @@ function App() {
                 Evidence Document (optional):
                 <input
                   type="file"
-                  onChange={(e) => setEvidenceFile(e.target.files[0] || null)}
+                  onChange={(e) =>
+                    setEvidenceFile(e.target.files[0] || null)
+                  }
                 />
               </label>
               <button type="submit">Submit Case</button>
@@ -409,53 +496,34 @@ function App() {
       {user.role === "JUDGE" && (
         <div className="card">
           <h2>All Cases</h2>
-
           <div className="filter-row">
-            <button
-              type="button"
-              className={`filter-btn ${judgeFilter === "ALL" ? "active" : ""}`}
-              onClick={() => setJudgeFilter("ALL")}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${
-                judgeFilter === "PENDING" ? "active" : ""
-              }`}
-              onClick={() => setJudgeFilter("PENDING")}
-            >
-              Pending
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${
-                judgeFilter === "APPROVED" ? "active" : ""
-              }`}
-              onClick={() => setJudgeFilter("APPROVED")}
-            >
-              Approved
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${
-                judgeFilter === "REJECTED" ? "active" : ""
-              }`}
-              onClick={() => setJudgeFilter("REJECTED")}
-            >
-              Rejected
-            </button>
-            <button type="button" onClick={fetchCases}>
+            {["ALL", "PENDING", "APPROVED", "REJECTED"].map((status) => (
+              <button
+                key={status}
+                type="button"
+                className={
+                  status === judgeFilter ? "filter-btn active" : "filter-btn"
+                }
+                onClick={() => {
+                  setJudgeFilter(status);
+                  fetchCases(status);
+                }}
+              >
+                {status === "ALL"
+                  ? "All"
+                  : status.charAt(0) + status.slice(1).toLowerCase()}
+              </button>
+            ))}
+            <button type="button" onClick={() => fetchCases(judgeFilter)}>
               Refresh
             </button>
           </div>
-
           {loadingCases ? (
             <p>Loading...</p>
           ) : cases.length === 0 ? (
             <p>No cases.</p>
           ) : (
-            renderCasesTable(filteredJudgeCases)
+            renderCasesTable()
           )}
         </div>
       )}
@@ -463,7 +531,9 @@ function App() {
       {user.role === "JUROR" && (
         <div className="card">
           <h2>Approved Cases (for Voting)</h2>
-          <button onClick={fetchCases}>Refresh</button>
+          <button type="button" onClick={() => fetchCases()}>
+            Refresh
+          </button>
           {loadingCases ? (
             <p>Loading...</p>
           ) : cases.length === 0 ? (
